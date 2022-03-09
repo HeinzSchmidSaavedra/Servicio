@@ -5,16 +5,10 @@
 #include <LowPower.h>
 #define DEBUG
 
-//switched power lines pin
-#define SWITCHED_POWER 22
+// LED pin
+#define LED 13
 
-//Error flag and error LED pin
-#define ERROR_LED 9
-bool error;
 
-//Operation Success pin
-#define SUCCESS_LED 8
-bool success;
 //SD card pin 
 #define sd 10
 //DateTime variable for the time
@@ -50,21 +44,17 @@ void setup(){
   Serial.begin(9600);
   #endif
   //configure switched power, error and success pins
-    pinMode(SWITCHED_POWER, OUTPUT);
-    digitalWrite(SWITCHED_POWER, LOW);
-    pinMode(ERROR_LED, OUTPUT);
-    digitalWrite(ERROR_LED, LOW);
-    pinMode(SUCCESS_LED, OUTPUT);
-    digitalWrite(SUCCESS_LED, LOW);
+    pinMode(LED, OUTPUT);
+    digitalWrite(LED, LOW);
     //If the SD card doesn't initialize 
      while(!SD.begin(sd)) {
       #if defined DEBUG
         Serial.print("SD card reding failed");
       #endif
-      digitalWrite(ERROR_LED, HIGH);
+      digitalWrite(LED, HIGH);
       delay(500);//espera antes de volver a intentarlo 
     }
-    digitalWrite(ERROR_LED, LOW);
+    digitalWrite(LED, LOW);
     #if defined DEBUG
       Serial.print("SD card reading succesful");
     #endif
@@ -74,15 +64,16 @@ void setup(){
     PcInt::attachInterrupt(interruptPin, INT0_ISR);
     //initialize rtc
     rtc.begin();
-    rtc.enableInterrupts(EveryHour);
-
+    #if defined DEBUG 
+      rtc.interrupts(EveryMinute);
+    #else
+      rtc.enableInterrupts(EveryHour);
+    #endif
 }
 void loop(){
-  //turn the switched source on
-    digitalWrite(SWITCHED_POWER, HIGH);
+  //Reads the transducer voltage
     float volt = analogRead(transductor_voltage);
-    //power sensor off as soon as it finishes reading
-    digitalWrite(SWITCHED_POWER, LOW);
+    //cleans  the sting buffer
     string_buffer = "";
     batterysenseValue = analogRead(batteryPin); 
     ////////
@@ -100,20 +91,30 @@ void loop(){
       file = SD.open(string_buffer, FILE_WRITE);
       if (file)
       {
+        
         file.println(F("Fecha/hora, presión, Bateria"));
         file.close();
       }
-      else error = true;
+      else{
+        //In case something goes wrong warn me with the LED
+        int cont = 0;
+        while(cont<2){
+        digitalWrite(LED, HIGH);
+        delay(100);
+        digitalWrite(LED,LOW);
+        delay(100);
+        cont+=1;
+        }
+      }
     }
     file = SD.open(string_buffer, FILE_WRITE);
     string_buffer = ""; 
     now.addToString(string_buffer);
     string_buffer.concat("," + String(volt)+","+ String(batteryvoltage));
     #if defined DEBUG
-    Serial.println(string_buffer);
+      Serial.println(string_buffer);
     #endif
-    if (file)
-    {
+    if (file){
       file.println(string_buffer);
       file.close();
       #if defined DEBUG
